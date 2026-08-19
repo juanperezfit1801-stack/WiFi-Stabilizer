@@ -1,0 +1,95 @@
+WifiMonitor.cs
+using System;
+using System.Diagnostics;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
+
+namespace WiFiStabilizer.Services;
+
+public class WifiInfo
+{
+    public string Ssid { get; set; } = "Desconocido";
+    public string Bssid { get; set; } = "Desconocido";
+    public string Channel { get; set; } = "-";
+    public string RadioType { get; set; } = "-";
+    public string ReceiveRate { get; set; } = "-";
+    public string TransmitRate { get; set; } = "-";
+    public int Signal { get; set; } = 0;
+}
+
+public class WifiMonitor
+{
+    public async Task<WifiInfo> GetWifiInfoAsync()
+    {
+        var info = new WifiInfo();
+
+        try
+        {
+            var output = await RunCommandAsync(
+                "netsh",
+                "wlan show interfaces");
+
+            info.Ssid = GetValue(output, "SSID");
+            info.Bssid = GetValue(output, "BSSID");
+            info.Channel = GetValue(output, "Channel");
+            info.RadioType = GetValue(output, "Radio type");
+            info.ReceiveRate = GetValue(output, "Receive rate");
+            info.TransmitRate = GetValue(output, "Transmit rate");
+
+            var signal = GetValue(output, "Signal");
+
+            if (int.TryParse(
+                    signal.Replace("%", "").Trim(),
+                    out var percentage))
+            {
+                info.Signal = percentage;
+            }
+        }
+        catch
+        {
+            // Se conserva la información anterior si Windows no responde.
+        }
+
+        return info;
+    }
+
+    private static string GetValue(string text, string key)
+    {
+        var match = Regex.Match(
+            text,
+            @"^\s*" + Regex.Escape(key) + @"\s*:\s*(.+)$",
+            RegexOptions.Multiline | RegexOptions.IgnoreCase);
+
+        return match.Success
+            ? match.Groups[1].Value.Trim()
+            : "-";
+    }
+
+    private static async Task<string> RunCommandAsync(
+        string file,
+        string arguments)
+    {
+        var psi = new ProcessStartInfo
+        {
+            FileName = file,
+            Arguments = arguments,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using var process = new Process
+        {
+            StartInfo = psi
+        };
+
+        process.Start();
+
+        var output = await process.StandardOutput.ReadToEndAsync();
+
+        await process.WaitForExitAsync();
+
+        return output;
+    }
+}
