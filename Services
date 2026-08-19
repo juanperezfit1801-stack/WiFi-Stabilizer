@@ -93,3 +93,54 @@ public class WifiMonitor
         return output;
     }
 }
+using System;
+using System.Net.NetworkInformation;
+using System.Threading.Tasks;
+
+namespace WiFiStabilizer.Services;
+
+public class NetworkStatus
+{
+    public bool Connected { get; set; }
+    public long PingMs { get; set; }
+    public int PacketLoss { get; set; }
+}
+
+public class NetworkMonitor
+{
+    private const string TestHost = "1.1.1.1";
+
+    public async Task<NetworkStatus> CheckAsync()
+    {
+        var status = new NetworkStatus();
+
+        try
+        {
+            using var ping = new Ping();
+
+            var reply = await ping.SendPingAsync(
+                TestHost,
+                2000);
+
+            if (reply.Status == IPStatus.Success)
+            {
+                status.Connected = true;
+                status.PingMs = reply.RoundtripTime;
+                status.PacketLoss = 0;
+            }
+            else
+            {
+                status.Connected = false;
+                status.PingMs = 0;
+                status.PacketLoss = 100;
+            }
+        }
+        catch
+        {
+            status.Connected = false;
+            status.PacketLoss = 100;
+        }
+
+        return status;
+    }
+}
